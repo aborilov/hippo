@@ -1,0 +1,45 @@
+services:
+  database:
+    image: postgres:16.4
+    container_name: database
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+
+  init-migrate-seed:
+    image: localhost/hippo/med:0.0.1
+    pull_policy: never
+    container_name: init-migrate-seed
+    restart: unless-stopped
+    entrypoint: >
+      /bin/sh -c "
+      ./wait-for-it.sh database:5432 --timeout=60 --strict &&
+      ./admin migrate-seed
+      "
+    environment:
+      - HIPPO_DB_USER=postgres
+      - HIPPO_DB_PASSWORD=postgres
+      - HIPPO_DB_HOST=database
+      - HIPPO_DB_DISABLE_TLS=true
+    depends_on:
+      - database
+    deploy:
+      restart_policy:
+        condition: none
+
+  med:
+    image: localhost/hippo/med:0.0.1
+    pull_policy: never
+    container_name: med
+    restart: unless-stopped
+    ports:
+      - "6000:6000"
+    environment:
+      - HIPPO_DB_USER=postgres
+      - HIPPO_DB_PASSWORD=postgres
+      - HIPPO_DB_HOST=database
+      - HIPPO_DB_DISABLE_TLS=true
+    depends_on:
+      - init-migrate-seed
+

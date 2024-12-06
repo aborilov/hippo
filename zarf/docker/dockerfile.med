@@ -1,0 +1,31 @@
+# Build the Go Binary.
+FROM golang:1.23 AS build_med
+ENV CGO_ENABLED=0
+ARG BUILD_REF
+
+# Copy the source code into the container.
+COPY . /service
+
+# Build the admin binary.
+WORKDIR /service/api/tooling/admin
+RUN go build -ldflags "-X main.build=${BUILD_REF}"
+
+# # Build the service binary.
+WORKDIR /service/api/services/medication
+RUN go build -ldflags "-X main.build=${BUILD_REF}"
+
+
+# Run the Go Binary in Alpine.
+FROM alpine:3.20
+ARG BUILD_DATE
+ARG BUILD_REF
+RUN apk add --no-cache bash
+RUN addgroup -g 1000 -S hippo && \
+    adduser -u 1000 -h /service -G hippo -S hippo
+COPY --from=build_med --chown=hippo:hippo /service/api/tooling/admin/admin /service/admin
+COPY --from=build_med --chown=hippo:hippo /service/api/services/medication/medication /service/medication
+ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /service/wait-for-it.sh
+RUN chown hippo:hippo /service/wait-for-it.sh && chmod +x /service/wait-for-it.sh
+WORKDIR /service
+USER hippo
+CMD ["./medication"]
